@@ -19,18 +19,17 @@ class Config:
     # Slack Configuration
     SLACK_BOT_TOKEN = os.getenv('SLACK_BOT_TOKEN')
     SLACK_APP_TOKEN = os.getenv('SLACK_APP_TOKEN')
-    SLACK_USER_ID = os.getenv('SLACK_USER_ID')  # For DMs
+    SLACK_USER_ID = os.getenv('SLACK_USER_ID', 'W014QM1DAPN')  # For DMs
     SLACK_TEST_CHANNEL = os.getenv('SLACK_TEST_CHANNEL', 'credit_memo_testing')
     SLACK_PROD_CHANNEL = os.getenv('SLACK_PROD_CHANNEL', 'help-sms-credit-pumping-memos')
 
     # Looker Configuration
     LOOKER_CLIENT_ID = os.getenv('LOOKER_CLIENT_ID')
     LOOKER_CLIENT_SECRET = os.getenv('LOOKER_CLIENT_SECRET')
-    LOOKER_BASE_URL = os.getenv('LOOKER_BASE_URL', 'https://twilio.cloud.looker.com')
+    LOOKER_BASE_URL = os.getenv('LOOKER_BASE_URL', 'https://twiliocloud.cloud.looker.com')
 
     # Bot Configuration
     BOT_NAME = os.getenv('BOT_NAME', 'CreditBot')
-    DRY_RUN = os.getenv('DRY_RUN', 'true').lower() == 'true'
 
     # Notebook Configuration
     NOTEBOOK_PATH = project_root / os.getenv('NOTEBOOK_PATH', 'Verify - Credit Recommendation.ipynb')
@@ -64,8 +63,8 @@ class Config:
 
     @classmethod
     def get_channel(cls):
-        """Get the appropriate Slack channel based on dry run mode"""
-        return cls.SLACK_TEST_CHANNEL if cls.DRY_RUN else cls.SLACK_PROD_CHANNEL
+        """Get the Slack channel for posting (always test channel)"""
+        return cls.SLACK_TEST_CHANNEL
 
 
 # Validate configuration on import

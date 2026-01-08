@@ -49,6 +49,8 @@ output/
 *.pem
 *.key
 credentials/
+*creds*.txt
+slack*.txt
 
 # Airflow (if used)
 airflow.db

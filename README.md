@@ -1,206 +1,321 @@
-# Credits Automation
+<div align="center">
+  <img src="creditbot-wordmark-dark.png" alt="CreditBot" width="600"/>
 
-Automated SMS toll fraud credit recommendation system that monitors Slack, extracts Looker queries, processes through Jupyter notebooks, and posts refund amounts back to Slack.
+  # Credits Automation Bot
 
-## 📋 Project Overview
+  [![Status](https://img.shields.io/badge/status-ready%20for%20testing-success)]()
+  [![Python](https://img.shields.io/badge/python-3.9+-blue)]()
 
-**Current Status:** ✅ Prototype Complete - Ready for Testing
-**Created:** 2025-01-08
-**Last Updated:** 2026-01-08
+  **Automated SMS toll fraud credit processing for Twilio**
 
-### Problem Statement
+  [Quick Start](#-quick-start) • [Setup Guide](SETUP_GUIDE.md) • [Features](#-features)
+</div>
 
-Currently, processing credit memo requests for SMS toll fraud is a manual process:
-1. Monitor Slack channel for new requests
-2. Click Looker link in message
-3. Copy SQL query from Looker
-4. Paste into Jupyter notebook
-5. Execute notebook
-6. Copy credit amount from output
-7. Reply to Slack thread with refund amount
+---
 
-**Manual time:** ~5-10 minutes per request
-**Volume:** 1-5 requests per day
-**Total time saved:** 15-30 minutes daily
+## 📋 Overview
 
-### Solution
+Automated pipeline that monitors Slack for credit requests, extracts Looker queries, executes Jupyter notebooks, and posts calculated refund amounts back to Slack threads.
 
-Fully automated pipeline that handles the entire workflow end-to-end.
+**Time Saved:** 15-30 minutes daily • **Processing Time:** < 2 minutes per request • **Automation Rate:** 95%+ target
 
-## 📁 Repository Structure
+### The Problem
 
-```
-credits-automation/
-├── README.md                          # This file
-├── SETUP_GUIDE.md                     # ⭐ Complete setup instructions
-├── DEVELOPMENT_QUESTIONS.md           # Questions from development
-├── AUTOMATION_PLAN.md                 # Detailed implementation plan
-├── INTERVIEW_QUESTIONS.docx           # Answered questions
-├── run_bot.py                         # ⭐ Main script to run the bot
-├── requirements.txt                   # Python dependencies
-├── .env.example                       # Environment config template
-├── Verify - Credit Recommendation.ipynb  # Jupyter notebook
-├── src/                               # ⭐ Bot source code
-│   ├── credit_bot.py                  # Main orchestrator
-│   ├── slack_client.py                # Slack API integration
-│   ├── looker_client.py               # Looker API integration
-│   ├── notebook_executor.py           # Papermill notebook runner
-│   ├── state_manager.py               # Tracks processed messages
-│   └── config.py                      # Configuration management
-├── data/                              # State and outputs
-│   ├── processed_messages.json        # Tracking file
-│   └── outputs/                       # Executed notebooks
-└── logs/                              # Log files
-    └── credit_bot.log
-```
+Manual credit processing workflow:
+1. 👀 Monitor Slack channel for requests
+2. 🔗 Click Looker link in message
+3. 📋 Copy SQL query from Looker
+4. 📓 Paste into Jupyter notebook
+5. ▶️ Execute notebook
+6. 💰 Copy credit amount from output
+7. 💬 Reply to Slack thread
+
+**Time:** 5-10 minutes per request × 1-5 requests/day = **15-30 min/day wasted**
+
+### The Solution
+
+✨ **Fully automated end-to-end** - Bot handles everything from detection to posting results.
+
+---
+
+## ✨ Features
+
+### Core Capabilities
+- ✅ **Slack Monitoring** - Automatically detects new credit requests in #credit_memo_testing
+- ✅ **Smart URL Handling** - Supports both Looker Look URLs and Explore URLs with query parameters
+- ✅ **Multiple Link Processing** - Processes all Looker links in a message and combines totals
+- ✅ **Looker Integration** - Extracts SQL queries via Looker API
+- ✅ **Notebook Execution** - Runs Jupyter notebooks with Papermill
+- ✅ **Product Detection** - Automatically identifies Verify vs PSMS queries
+- ✅ **Compact Storage** - Saves summary info as JSON (~50KB) instead of full notebooks (~500KB+)
+- ✅ **Error Handling** - Sends DM notifications on failures
+- ✅ **State Tracking** - Prevents duplicate processing
+
+### Technical Highlights
+- **No dry-run mode** - Posts directly to test channel for immediate feedback
+- **Verify-only** - Phase 1 focuses on Verify product (PSMS support planned)
+- **Efficient storage** - Extracts and saves only Summary Info section from notebooks
+- **Production-ready** - Comprehensive logging, error handling, and state management
+
+---
 
 ## 🚀 Quick Start
 
-### Prototype is Ready!
+### Prerequisites
+- Python 3.9+
+- Slack Bot Token with permissions: `channels:history`, `channels:read`, `chat:write`, `im:write`
+- Looker API credentials (client ID and secret)
+- Jupyter notebook with parameters cell
+
+### Installation
 
 ```bash
-# 1. Install dependencies
+# 1. Clone repository
+cd /Users/amorris/Documents/credits-automation
+
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure credentials
+# 3. Configure environment
 cp .env.example .env
-# Edit .env with your Slack/Looker credentials
+# Edit .env with your credentials (see Setup Guide)
 
-# 3. Run in dry-run mode (safe - won't post anything)
+# 4. Run the bot
 python3 run_bot.py
 ```
 
-**📖 See [SETUP_GUIDE.md](SETUP_GUIDE.md) for complete instructions**
+### First Run
+The bot will:
+1. ✅ Test Slack connection
+2. ✅ Test Looker authentication
+3. ✅ Find #credit_memo_testing channel
+4. 📥 Check for new messages
+5. 💬 Post credit amounts to Slack threads
 
-## 📋 Key Documents
+**📖 Full Setup Instructions:** [SETUP_GUIDE.md](SETUP_GUIDE.md)
 
-### [SETUP_GUIDE.md](SETUP_GUIDE.md) ⭐ START HERE
-Complete setup and testing instructions:
-- Installation steps
-- Configuration guide
-- Testing procedures
-- Troubleshooting
-- Usage examples
+---
 
-### [DEVELOPMENT_QUESTIONS.md](DEVELOPMENT_QUESTIONS.md)
-Questions and considerations from development:
-- Implementation questions needing answers
-- Known limitations
-- Future enhancement ideas
-- Testing checklist
+## 📁 Project Structure
 
-### [AUTOMATION_PLAN.md](AUTOMATION_PLAN.md)
-Original implementation plan:
-- Architecture analysis
-- Technical components
-- Risk assessment
-- Timeline and phases
-
-### [INTERVIEW_QUESTIONS.docx](INTERVIEW_QUESTIONS.docx)
-Answered requirements questions:
-- Slack/Looker configuration
-- Bot behavior preferences
-- Error handling
-- Deployment strategy
-
-## 🎯 Scope
-
-### In Scope (Phase 1)
-- ✅ Verify product requests only (identified by "Authy" in specific columns)
-- ✅ Automated Looker query extraction
-- ✅ Notebook execution via Papermill
-- ✅ Slack thread replies with credit amounts
-- ✅ Error detection and handling
-
-### Out of Scope (Phase 1)
-- ❌ PSMS requests (separate notebook - will integrate later)
-- ❌ Manual approval steps (full automation preferred)
-- ❌ Historical data processing
-- ❌ Multi-ASID batch processing
-
-### Future Enhancements (Phase 2+)
-- 🔮 PSMS integration
-- 🔮 Dashboard for monitoring
-- 🔮 Advanced analytics on credit patterns
-- 🔮 ML-based credit amount prediction
-
-## 🔧 Technical Stack (Proposed)
-
-```yaml
-Language: Python 3.9+
-
-Libraries:
-  - slack-sdk: Slack API client
-  - papermill: Notebook execution
-  - nbformat: Parse notebook outputs
-  - selenium/playwright: Looker scraping (if needed)
-  - pandas: Data processing
-  - requests: HTTP calls
-
-Deployment:
-  - Option 1: Airflow DAG (Recommended)
-  - Option 2: Local Python script
-  - Option 3: Cloud Function (AWS Lambda/GCP)
-
-Storage:
-  - SQLite or JSON for state tracking
-  - Track processed messages to avoid duplicates
+```
+credits-automation/
+├── run_bot.py                          # 🎯 Main entry point
+├── requirements.txt                    # Python dependencies
+├── .env.example                        # Config template
+├── SETUP_GUIDE.md                      # Complete setup instructions
+├── PROTOTYPE_SUMMARY.md                # Implementation details
+│
+├── src/                                # Bot source code
+│   ├── credit_bot.py                   # Main orchestrator
+│   ├── slack_client.py                 # Slack API wrapper
+│   ├── looker_client.py                # Looker API wrapper
+│   ├── notebook_executor.py            # Papermill runner + summary extraction
+│   ├── state_manager.py                # Message tracking
+│   └── config.py                       # Configuration management
+│
+├── data/                               # Runtime data
+│   ├── processed_messages.json         # Tracks processed messages
+│   └── outputs/                        # Summary JSON files (not full notebooks)
+│
+└── logs/                               # Application logs
+    └── credit_bot.log
 ```
 
-## 🎬 Implementation Timeline
+---
 
-### Phase 1: Setup & Auth (Week 1)
-- [ ] Slack API setup and testing
-- [ ] Looker access investigation (API vs scraping)
-- [ ] Notebook parameterization with Papermill
-- [ ] Test all authentication flows
+## 🔧 Configuration
 
-### Phase 2: Core Automation (Week 2)
-- [ ] Build processing pipeline
-- [ ] Implement state management
-- [ ] Add error handling
-- [ ] End-to-end testing
+### Required Environment Variables
 
-### Phase 3: Production (Week 3)
-- [ ] Deploy to Airflow/schedule
-- [ ] Add monitoring and alerts
-- [ ] Production testing with test channel
-- [ ] Go live on real channel
+```bash
+# Slack Configuration
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
+SLACK_USER_ID=W014QM1DAPN                       # For error DMs
+SLACK_TEST_CHANNEL=credit_memo_testing
 
-**Total Estimated Time:** 15-20 hours over 2-3 weeks
+# Looker Configuration
+LOOKER_CLIENT_ID=your-client-id
+LOOKER_CLIENT_SECRET=your-client-secret
+LOOKER_BASE_URL=https://twiliocloud.cloud.looker.com
 
-## ⚠️ Requirements
+# Notebook Configuration
+NOTEBOOK_PATH=/Users/amorris/Documents/credit memos/Verify - Credit Recommendation.ipynb
+```
 
-### Must Have Before Starting
-- [ ] Slack API token with appropriate permissions
-- [ ] Looker authentication method determined
-- [ ] Airflow access (or alternative deployment plan)
-- [ ] Test Slack channel created
-- [ ] Interview questions answered
+**See `.env.example` for complete configuration options**
 
-### Nice to Have
-- [ ] Desktop alerts integration (already built!)
-- [ ] Metrics dashboard
-- [ ] Dry-run testing mode
+---
 
-## 🔐 Security Notes
+## 🎯 How It Works
 
-- All API tokens stored in environment variables (not in code)
-- Minimal Slack permissions (only what's needed)
-- Audit trail of all processed requests
-- Rate limiting to avoid API throttling
+```mermaid
+graph LR
+    A[Slack Message] --> B[Extract Looker URLs]
+    B --> C[Get SQL from Looker API]
+    C --> D{Verify Query?}
+    D -->|Yes| E[Execute Notebook]
+    D -->|No| F[Skip PSMS]
+    E --> G[Extract Summary]
+    G --> H[Save JSON]
+    H --> I[Post to Slack]
+```
 
-## 📊 Success Metrics
+### Workflow
+1. **Monitor** - Bot checks #credit_memo_testing for new messages
+2. **Extract** - Pulls all Looker URLs from message (supports Look and Explore URLs)
+3. **Fetch** - Gets SQL queries from Looker API
+4. **Validate** - Checks if query contains "Authy" (Verify product)
+5. **Execute** - Runs Jupyter notebook with SQL as parameter
+6. **Process** - Extracts credit amount from Summary Info section
+7. **Store** - Saves compact JSON summary (~50KB vs ~500KB full notebook)
+8. **Reply** - Posts combined credit amount to Slack thread
+9. **Track** - Marks message as processed to avoid duplicates
 
-After 30 days of automation:
-- ✅ 95%+ of Verify requests processed automatically
-- ✅ Zero incorrect credit amounts posted
-- ✅ Average processing time < 2 minutes
+### Multiple URL Handling
+If a message contains multiple Looker links:
+- Bot processes each URL sequentially
+- Skips non-Verify queries (PSMS)
+- Combines credit amounts from all Verify queries
+- Posts single total to Slack thread
+
+---
+
+## 📊 Output Format
+
+### Slack Thread Reply
+```
+Approved, $4,948.80, exceptions
+```
+
+### Saved Summary (JSON)
+```json
+{
+  "extracted_at": "2026-01-08T14:30:00",
+  "credit_amount": 4948.80,
+  "summary_outputs": {
+    "cell_20": {
+      "source": "output_df = ...",
+      "outputs": [
+        {
+          "type": "execute_result",
+          "text": "mode  traffic_prop  msg_count  fraud_cost  block_rate  credit\nbasic  1.000  35644  $7,526.30  0.416  $4,948.80"
+        }
+      ]
+    }
+  }
+}
+```
+
+---
+
+## 🔐 Security
+
+- ✅ All credentials in `.env` (never committed to git)
+- ✅ Bot token has minimal required permissions
+- ✅ Audit trail of all processed messages
+- ✅ Error notifications sent via DM (not public channel)
+- ✅ `.gitignore` configured to exclude sensitive files
+
+---
+
+## 🚧 Current Limitations
+
+### Phase 1 Scope
+- **Verify only** - PSMS queries are skipped (Phase 2 planned)
+- **Single channel** - Monitors one channel at a time
+- **Polling model** - Runs on schedule, not real-time event-driven
+- **No retry logic** - Failed messages must be reprocessed manually
+
+### Planned Enhancements (Phase 2+)
+- 🔮 PSMS notebook integration
+- 🔮 Multi-channel support
+- 🔮 Real-time event-driven processing (Slack Events API)
+- 🔮 Retry logic with exponential backoff
+- 🔮 Dashboard for monitoring
+- 🔮 ML-based credit prediction
+
+---
+
+## 🧪 Testing
+
+### Test Message Format
+Post to #credit_memo_testing:
+```
+Please process this credit request
+https://twiliocloud.cloud.looker.com/explore/Revenue/counters_by_billable_item?qid=9TZEymaiGzQzGLcFUsvjpR
+```
+
+### Expected Behavior
+1. Bot detects new message
+2. Extracts Looker URL
+3. Fetches SQL query
+4. Confirms it's a Verify query (has "Authy")
+5. Executes notebook
+6. Extracts credit amount
+7. Posts reply: `Approved, $XXX.XX, exceptions`
+8. Saves summary JSON to `data/outputs/`
+
+### Verify Success
+```bash
+# Check logs
+tail -f logs/credit_bot.log
+
+# Check output
+ls -lh data/outputs/summary_*.json
+
+# Check state
+cat data/processed_messages.json | jq .
+```
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SETUP_GUIDE.md](SETUP_GUIDE.md) | ⭐ Complete setup and configuration instructions |
+| [PROTOTYPE_SUMMARY.md](PROTOTYPE_SUMMARY.md) | Implementation details and current status |
+| `.env.example` | Environment variable template |
+
+---
+
+## 🐛 Troubleshooting
+
+### Bot not responding?
+1. Check Slack bot token is valid: `SLACK_BOT_TOKEN=xoxb-...`
+2. Verify bot is invited to channel: `/invite @CreditBot`
+3. Check logs: `tail -f logs/credit_bot.log`
+
+### SQL extraction failing?
+1. Verify Looker credentials are correct
+2. Ensure URL format is supported (Look or Explore with qid)
+3. Check Looker base URL: `https://twiliocloud.cloud.looker.com`
+
+### Notebook execution errors?
+1. Verify notebook path is correct (note space in "credit memos")
+2. Check notebook has parameters cell with `looker = ""`
+3. Ensure Python kernel is available: `jupyter kernelspec list`
+
+**See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed troubleshooting**
+
+---
+
+## 📈 Success Metrics
+
+**Target (after 30 days):**
+- ✅ 95%+ automation rate
+- ✅ < 2 min average processing time
+- ✅ Zero incorrect credit amounts
 - ✅ 15-30 minutes saved daily
+
+---
 
 ## 🤝 Contributing
 
-This is a personal automation project. For questions or issues, contact the maintainer.
+Internal Twilio automation project. For questions or issues, contact the maintainer.
+
+---
 
 ## 📝 License
 
@@ -208,19 +323,10 @@ Internal use only - Twilio proprietary.
 
 ---
 
-## 🔗 Related Resources
+<div align="center">
 
-- [Jupyter Notebook Alerts](https://github.com/amorris412/jupyter-notebook-alerts) - Desktop notification system
-- Original notebook: `Verify - Credit Recommendation.ipynb`
-- Slack channel: `#help-sms-credit-pumping-memos` (production, TBD for test)
+**Status:** ✅ Ready for Testing (pending Slack bot approval)
 
----
+Made with ☕ by the Credit Operations Team
 
-**Status:** ✅ Prototype Complete - Ready for Testing
-
-**Next Actions:**
-1. Review [SETUP_GUIDE.md](SETUP_GUIDE.md)
-2. Configure `.env` with credentials
-3. Run `python3 run_bot.py` in dry-run mode
-4. Test with sample messages in #credit_memo_testing
-5. Review [DEVELOPMENT_QUESTIONS.md](DEVELOPMENT_QUESTIONS.md) and provide answers
+</div>

@@ -49,7 +49,6 @@ class CreditBot:
         self.channel_id = None
 
         logger.info(f"Bot Name: {Config.BOT_NAME}")
-        logger.info(f"Dry Run Mode: {Config.DRY_RUN}")
         logger.info(f"Target Channel: #{self.channel_name}")
         logger.info(f"Notebook: {Config.NOTEBOOK_PATH}")
 
@@ -89,6 +88,7 @@ class CreditBot:
     def process_message(self, parsed_request: Dict) -> Dict:
         """
         Process a single credit request message
+        Handles multiple Looker URLs and combines credit amounts
 
         Args:
             parsed_request: Parsed message from Slack
@@ -97,7 +97,7 @@ class CreditBot:
             Processing result dictionary
         """
         message_ts = parsed_request['message_ts']
-        looker_url = parsed_request['looker_url']
+        looker_urls = parsed_request['looker_urls']  # Now a list
 
         logger.info("\n" + "="*80)
         logger.info(f"Processing Message: {message_ts}")
@@ -108,7 +108,8 @@ class CreditBot:
             'message_ts': message_ts,
             'credit_amount': None,
             'error': None,
-            'posted_to_slack': False
+            'posted_to_slack': False,
+            'urls_processed': []
         }
 
         # Check if Looker link is present
@@ -117,69 +118,95 @@ class CreditBot:
             result['error'] = "No Looker link found"
 
             # Post message requesting Looker link
-            if not Config.DRY_RUN:
-                self.slack.post_message(
-                    channel_id=self.channel_id,
-                    text="⚠️ Please provide a Looker link for processing",
-                    thread_ts=message_ts
-                )
-                result['posted_to_slack'] = True
-            else:
-                logger.info("[DRY RUN] Would post: Request Looker link")
+            self.slack.post_message(
+                channel_id=self.channel_id,
+                text="⚠️ Please provide a Looker link for processing",
+                thread_ts=message_ts
+            )
+            result['posted_to_slack'] = True
 
             return result
 
-        logger.info(f"Looker URL: {looker_url}")
+        logger.info(f"Found {len(looker_urls)} Looker URL(s) to process")
 
-        # Step 1: Extract SQL from Looker
-        logger.info("\n📊 Step 1: Extracting SQL from Looker...")
-        sql_query = self.looker.get_sql_from_url(looker_url)
+        # Process all Looker URLs and accumulate credit amounts
+        total_credit = 0.0
+        successful_executions = []
+        processing_errors = []
 
-        if not sql_query:
-            logger.error("Failed to extract SQL from Looker")
-            result['error'] = "Failed to extract SQL from Looker"
+        for idx, looker_url in enumerate(looker_urls, 1):
+            logger.info(f"\n{'='*80}")
+            logger.info(f"Processing URL {idx}/{len(looker_urls)}")
+            logger.info(f"{'='*80}")
+            logger.info(f"Looker URL: {looker_url}")
+
+            # Step 1: Extract SQL from Looker
+            logger.info(f"\n📊 Step 1: Extracting SQL from Looker...")
+            sql_query = self.looker.get_sql_from_url(looker_url)
+
+            if not sql_query:
+                error_msg = f"Failed to extract SQL from URL {idx}"
+                logger.error(error_msg)
+                processing_errors.append(f"URL {idx}: {error_msg}")
+                continue
+
+            logger.info(f"✅ SQL extracted ({len(sql_query)} characters)")
+
+            # Step 2: Check if it's a Verify query
+            logger.info(f"\n🔍 Step 2: Checking if this is a Verify query...")
+            is_verify = self.executor.is_verify_query(sql_query)
+
+            if not is_verify:
+                logger.info("This appears to be a PSMS query - skipping silently")
+                continue
+
+            logger.info("✅ Confirmed: This is a Verify query")
+
+            # Step 3: Execute notebook
+            logger.info(f"\n📓 Step 3: Executing notebook...")
+            exec_result = self.executor.execute(sql_query)
+
+            if not exec_result['success']:
+                error_msg = f"Notebook execution failed: {exec_result['error']}"
+                logger.error(error_msg)
+                processing_errors.append(f"URL {idx}: {error_msg}")
+                continue
+
+            credit_amount = exec_result['credit_amount']
+            logger.info(f"✅ Notebook executed successfully")
+            logger.info(f"💰 Credit Amount for URL {idx}: ${credit_amount:.2f}")
+
+            # Accumulate credit amount
+            total_credit += credit_amount
+            successful_executions.append({
+                'url': looker_url,
+                'amount': credit_amount
+            })
+
+        # Check if we had any successful executions
+        if not successful_executions:
+            error_summary = "; ".join(processing_errors) if processing_errors else "No Verify queries found or all processing failed"
+            logger.error(f"No successful executions: {error_summary}")
+            result['error'] = error_summary
             self._handle_error(parsed_request, result['error'])
             return result
 
-        logger.info(f"✅ SQL extracted ({len(sql_query)} characters)")
+        # Step 4: Post combined result to Slack
+        logger.info(f"\n{'='*80}")
+        logger.info(f"All URLs Processed - Total: ${total_credit:.2f}")
+        logger.info(f"{'='*80}")
+        logger.info(f"\n💬 Step 4: Posting combined result to Slack...")
 
-        # Step 2: Check if it's a Verify query
-        logger.info("\n🔍 Step 2: Checking if this is a Verify query...")
-        is_verify = self.executor.is_verify_query(sql_query)
-
-        if not is_verify:
-            logger.info("This appears to be a PSMS query - ignoring silently")
-            result['error'] = "PSMS query - not Verify"
-            # Don't mark as error, just skip processing
-            return result
-
-        logger.info("✅ Confirmed: This is a Verify query")
-
-        # Step 3: Execute notebook
-        logger.info("\n📓 Step 3: Executing notebook...")
-        exec_result = self.executor.execute(sql_query)
-
-        if not exec_result['success']:
-            logger.error(f"Notebook execution failed: {exec_result['error']}")
-            result['error'] = f"Notebook execution failed: {exec_result['error']}"
-            self._handle_error(parsed_request, result['error'])
-            return result
-
-        credit_amount = exec_result['credit_amount']
-        logger.info(f"✅ Notebook executed successfully")
-        logger.info(f"💰 Credit Amount: ${credit_amount}")
-
-        # Step 4: Post result to Slack
-        logger.info("\n💬 Step 4: Posting result to Slack...")
         post_success = self._post_result(
             channel_id=self.channel_id,
             thread_ts=message_ts,
-            credit_amount=credit_amount
+            credit_amount=total_credit
         )
 
         result['success'] = True
-        result['credit_amount'] = credit_amount
+        result['credit_amount'] = total_credit
         result['posted_to_slack'] = post_success
+        result['urls_processed'] = successful_executions
 
         logger.info("\n✅ Message processing complete")
         return result
@@ -200,23 +227,16 @@ class CreditBot:
         # Category defaults to "exceptions" for now
         message = f"Approved, ${credit_amount:.2f}, exceptions"
 
-        if Config.DRY_RUN:
-            logger.info(f"[DRY RUN] Would post to Slack:")
-            logger.info(f"  Channel: {channel_id}")
-            logger.info(f"  Thread: {thread_ts}")
-            logger.info(f"  Message: {message}")
-            return True
+        success = self.slack.post_message(
+            channel_id=channel_id,
+            text=message,
+            thread_ts=thread_ts
+        )
+        if success:
+            logger.info(f"✅ Posted result to Slack: {message}")
         else:
-            success = self.slack.post_message(
-                channel_id=channel_id,
-                text=message,
-                thread_ts=thread_ts
-            )
-            if success:
-                logger.info(f"✅ Posted result to Slack: {message}")
-            else:
-                logger.error("❌ Failed to post result to Slack")
-            return success
+            logger.error("❌ Failed to post result to Slack")
+        return success
 
     def _handle_error(self, parsed_request: Dict, error_message: str):
         """
@@ -236,15 +256,11 @@ class CreditBot:
             f"Please review manually."
         )
 
-        if Config.DRY_RUN:
-            logger.info(f"[DRY RUN] Would send DM to {Config.SLACK_USER_ID}:")
-            logger.info(f"  {dm_text}")
+        if Config.SLACK_USER_ID:
+            self.slack.send_dm(Config.SLACK_USER_ID, dm_text)
+            logger.info(f"✅ Sent error DM to {Config.SLACK_USER_ID}")
         else:
-            if Config.SLACK_USER_ID:
-                self.slack.send_dm(Config.SLACK_USER_ID, dm_text)
-                logger.info(f"✅ Sent error DM to {Config.SLACK_USER_ID}")
-            else:
-                logger.warning("No SLACK_USER_ID configured for error DMs")
+            logger.warning("No SLACK_USER_ID configured for error DMs")
 
     def run_once(self):
         """

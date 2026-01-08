@@ -111,6 +111,41 @@ class LookerClient:
             logger.error(f"Error parsing Looker URL: {e}")
             return None
 
+    def extract_query_id(self, url: str) -> Optional[str]:
+        """
+        Extract query ID from Looker Explore URL
+
+        Args:
+            url: Looker Explore URL with qid parameter
+
+        Returns:
+            Query ID if found, None otherwise
+
+        Examples:
+            https://twiliocloud.cloud.looker.com/explore/...?qid=9TZEymaiGzQzGLcFUsvjpR -> "9TZEymaiGzQzGLcFUsvjpR"
+        """
+        try:
+            parsed = urlparse(url)
+
+            # Check for /explore/ pattern
+            if '/explore/' in parsed.path:
+                # Extract qid from query parameters
+                query_params = parse_qs(parsed.query)
+                qid = query_params.get('qid', [None])[0]
+
+                if qid:
+                    logger.info(f"Extracted query ID from Explore URL: {qid}")
+                    return qid
+                else:
+                    logger.warning(f"Explore URL found but no qid parameter: {url}")
+                    return None
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error extracting query ID from URL: {e}")
+            return None
+
     def get_look_sql(self, look_id: str) -> Optional[str]:
         """
         Get SQL query for a Look by ID
@@ -162,6 +197,44 @@ class LookerClient:
             logger.error(f"Error fetching Look SQL: {e}")
             return None
 
+    def get_query_sql(self, query_id: str) -> Optional[str]:
+        """
+        Get SQL query directly from a query ID
+        This is used for Explore URLs where we already have the query ID
+
+        Args:
+            query_id: Query ID from Explore URL
+
+        Returns:
+            SQL query string if found, None otherwise
+        """
+        try:
+            # Get the query details to get the SQL
+            query_url = f"{self.api_url}/queries/{query_id}"
+            response = requests.get(query_url, headers=self._get_headers())
+            response.raise_for_status()
+
+            query_data = response.json()
+
+            # Try different possible SQL fields
+            sql = None
+            if 'sql' in query_data:
+                sql = query_data['sql']
+            elif 'client_id' in query_data:
+                # For some queries, we need to run them to get SQL
+                sql = self._run_query_for_sql(query_id)
+
+            if sql:
+                logger.info(f"Successfully extracted SQL from query {query_id}")
+                return sql
+            else:
+                logger.error(f"Could not find SQL in query {query_id}")
+                return None
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching query SQL: {e}")
+            return None
+
     def _run_query_for_sql(self, query_id: str) -> Optional[str]:
         """
         Run a query to get its SQL
@@ -186,29 +259,42 @@ class LookerClient:
 
     def get_sql_from_url(self, url: str) -> Optional[str]:
         """
-        Extract SQL query from a Looker URL
+        Extract SQL query from a Looker URL (either Look or Explore URL)
 
         Args:
-            url: Looker Look URL
+            url: Looker Look URL or Explore URL
 
         Returns:
             SQL query string if successful, None otherwise
         """
         logger.info(f"Extracting SQL from Looker URL: {url}")
 
-        # Extract Look ID
+        # Try to extract Look ID first (for /looks/ URLs)
         look_id = self.extract_look_id(url)
-        if not look_id:
-            logger.error("Could not extract Look ID from URL")
-            return None
+        if look_id:
+            logger.info(f"Detected Look URL, extracting SQL from Look ID: {look_id}")
+            sql = self.get_look_sql(look_id)
+            if sql:
+                return sql
+            else:
+                logger.error("Could not retrieve SQL from Look")
+                return None
 
-        # Get SQL
-        sql = self.get_look_sql(look_id)
-        if not sql:
-            logger.error("Could not retrieve SQL from Look")
-            return None
+        # Try to extract query ID from Explore URL (for /explore/ URLs with qid parameter)
+        query_id = self.extract_query_id(url)
+        if query_id:
+            logger.info(f"Detected Explore URL, extracting SQL from query ID: {query_id}")
+            sql = self.get_query_sql(query_id)
+            if sql:
+                return sql
+            else:
+                logger.error("Could not retrieve SQL from query ID")
+                return None
 
-        return sql
+        # Neither Look nor Explore URL format recognized
+        logger.error(f"Could not extract Look ID or query ID from URL: {url}")
+        logger.error("Supported formats: /looks/12345 or /explore/.../...?qid=XXXXX")
+        return None
 
 
 # Example usage

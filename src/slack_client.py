@@ -213,12 +213,12 @@ class SlackClient:
         # Extract Looker URLs
         looker_urls = self.extract_looker_urls(text)
 
-        # If no Looker URL found, still return partial data
-        # The orchestrator can decide if it needs to request a link
+        # Return all Looker URLs found (not just the first one)
+        # The orchestrator will process all URLs and combine results
         return {
             'message_ts': message_ts,
             'text': text,
-            'looker_url': looker_urls[0] if looker_urls else None,
+            'looker_urls': looker_urls,  # Changed from looker_url to looker_urls (list)
             'user_id': user_id,
             'has_looker_link': len(looker_urls) > 0
         }
