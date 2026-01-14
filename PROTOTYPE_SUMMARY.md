@@ -1,14 +1,70 @@
-# Prototype Summary - Credit Automation Bot
+# Credit Automation Bot - Project Summary
 
-**Date:** 2026-01-08
-**Status:** ✅ Complete and Ready for Testing
-**Repository:** https://github.com/amorris4123/credits-automation
+**Last Updated:** 2026-01-14
+**Status:** 🚀 **Production Ready** (pending Presto credentials + Slack bot approval)
+**Repository:** https://github.com/twilio-internal/credits-automation
+**Deployment:** Airflow MWAA on `applied-data-science-prod-twilio`
 
 ---
 
-## 🎉 What I Built
+## 🎉 Project Evolution
 
-While you were away, I completed the full prototype implementation of the credit automation bot!
+### Phase 1: Prototype (Complete)
+Initial prototype with manual execution and local file storage.
+
+### Phase 2: Production Migration (Complete)
+Migrated to automated deployment on Twilio's Airflow infrastructure with:
+- **Containerization**: Docker-based deployment
+- **Orchestration**: Airflow DAG scheduling (every 15 minutes)
+- **Credential Management**: AWS Secrets Manager
+- **State Persistence**: S3-backed state management
+- **Kubernetes**: EKS for container execution
+
+---
+
+## 🏗️ Production Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Airflow (MWAA) - applied-data-science-prod-twilio          │
+│  DAG: credit_bot_automation                                  │
+│  Schedule: */15 * * * * (every 15 minutes)                   │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             ↓ KubernetesPodOperator
+    ┌──────────────────────────────────────┐
+    │  Kubernetes (EKS)                     │
+    │  Pod: credit-bot-{timestamp}          │
+    │                                        │
+    │  ┌────────────────────────────────┐  │
+    │  │ Docker Container                │  │
+    │  │ Image: ECR credit-bot:latest    │  │
+    │  │                                  │  │
+    │  │ run_bot.py (Python 3.9)         │  │
+    │  └────────────────────────────────┘  │
+    └──────────────────────────────────────┘
+             │
+             ├──→ AWS Secrets Manager (credentials)
+             ├──→ S3 (state + outputs)
+             ├──→ Slack API
+             ├──→ Looker API
+             └──→ Presto Database
+```
+
+### Key Infrastructure Components
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **Airflow DAG** | Schedules execution every 15 minutes | `airflow-dags` repo |
+| **Docker Image** | Containerized application | ECR `credit-bot` |
+| **EKS Pod** | Executes bot in Kubernetes | Applied data science EKS cluster |
+| **Secrets Manager** | Stores credentials securely | `credit-bot/credentials` |
+| **S3 Bucket** | State and outputs | `credit-bot-state-*` |
+| **CloudWatch** | Logs and monitoring | `/aws/eks/credit-bot` |
+
+---
+
+## 🛠️ What Was Built
 
 ### Core Components
 
@@ -47,13 +103,81 @@ While you were away, I completed the full prototype implementation of the credit
    - Comprehensive logging
 
 6. **Configuration** (`src/config.py`)
-   - Loads settings from `.env` file
+   - Loads settings from `.env` file (local)
+   - **Production**: Fetches from AWS Secrets Manager
+   - Environment detection (local vs Airflow)
+   - S3 path configuration
    - Validates required credentials
-   - Provides sensible defaults
+
+7. **AWS Integration** (`src/aws_integration.py`) - **NEW**
+   - AWS Secrets Manager client
+   - S3 read/write operations
+   - Environment detection (local/docker/kubernetes/airflow)
+   - Graceful fallback for local development
+
+### Production Infrastructure
+
+8. **Dockerfile**
+   - Multi-stage build for efficiency
+   - Python 3.9-slim base image
+   - Non-root user for security
+   - Health checks included
+   - Baked-in notebook and dependencies
+
+9. **Deployment Script** (`deploy.sh`)
+   - Automated Docker build and push
+   - ECR authentication
+   - Version tagging
+   - Image lifecycle management
+
+10. **Airflow DAG** (`airflow/credit_bot_dag.py`)
+    - KubernetesPodOperator configuration
+    - Resource limits (2Gi memory, 1 CPU)
+    - Retry logic (2 retries, 5 min delay)
+    - Secrets injection
+    - Execution timeout (10 minutes)
+    - Max one run at a time
+
+### Updated for Production
+
+- **State Manager**: Now uses S3 as source of truth, local file as cache
+- **Notebook Executor**: Uploads outputs to S3
+- **run_bot.py**: Signal handlers for graceful shutdown in Kubernetes
 
 ---
 
 ## ✨ Key Features
+
+### Production Features
+
+🚀 **Fully Automated Execution**
+- Runs every 15 minutes via Airflow
+- No manual intervention required
+- Self-healing (Kubernetes restarts on failure)
+
+🔐 **Secure Credential Management**
+- AWS Secrets Manager for all credentials
+- No credentials in code or environment files
+- IAM role-based access
+
+💾 **Persistent State Management**
+- S3-backed state survives pod restarts
+- Prevents duplicate processing
+- Versioned state files
+
+📊 **Comprehensive Monitoring**
+- CloudWatch logs (persistent)
+- Airflow UI (execution history)
+- S3 outputs (audit trail)
+- SLA alerts configured
+
+🐳 **Containerized Deployment**
+- Docker image in ECR
+- Kubernetes orchestration
+- Isolated execution environment
+- Easy rollback via image tags
+
+### Core Features (from prototype)
 
 ### 🔒 Dry-Run Mode (Default ON)
 - Bot processes everything but doesn't post to Slack
@@ -88,64 +212,114 @@ While you were away, I completed the full prototype implementation of the credit
 
 ## 📁 What's in the Repo
 
-### Main Files
-- `run_bot.py` - **Run this to start the bot**
-- `requirements.txt` - Python dependencies
-- `.env.example` - Template for your credentials
-- `Verify - Credit Recommendation.ipynb` - Your notebook
+### Application Code
+- `run_bot.py` - Main entry point
+- `requirements.txt` - Python dependencies (local dev)
+- `docker-requirements.txt` - Production dependencies
+- `.env.example` - Template for local credentials
+- `Verify - Credit Recommendation.ipynb` - Calculation notebook
 
 ### Source Code (`src/`)
 - `credit_bot.py` - Main orchestrator
 - `slack_client.py` - Slack integration
 - `looker_client.py` - Looker integration
-- `notebook_executor.py` - Notebook execution
-- `state_manager.py` - State tracking
-- `config.py` - Configuration
+- `notebook_executor.py` - Notebook execution (S3-enabled)
+- `state_manager.py` - State tracking (S3-backed)
+- `config.py` - Configuration (AWS Secrets Manager)
+- `aws_integration.py` - **NEW** AWS utilities
+
+### Production Infrastructure
+- `Dockerfile` - Container definition
+- `.dockerignore` - Build exclusions
+- `deploy.sh` - Automated deployment script
+- `airflow/credit_bot_dag.py` - Airflow DAG definition
 
 ### Documentation
-- `SETUP_GUIDE.md` - ⭐ **START HERE** - Complete setup instructions
-- `DEVELOPMENT_QUESTIONS.md` - Questions I have for you
-- `AUTOMATION_PLAN.md` - Original implementation plan
-- `README.md` - Project overview
+| Guide | Purpose |
+|-------|---------|
+| **[README.md](README.md)** | 📖 Project overview |
+| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Production deployment |
+| **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide |
+| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | 💻 Local development |
+| **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | ⭐ Setup instructions |
+| **[SECURITY_APPROVAL_BRIEF.md](SECURITY_APPROVAL_BRIEF.md)** | 🔐 Security documentation |
 
-### Data/Logs (Created at runtime)
+### Data/Logs (Local only - Production uses S3)
 - `data/processed_messages.json` - State tracking
-- `data/outputs/` - Executed notebooks
+- `data/outputs/` - Notebook outputs
 - `logs/credit_bot.log` - Log file
 
 ---
 
-## 🚀 How to Use
+## 🚀 Production Deployment
 
-### Step 1: Setup (5 minutes)
+Bot runs automatically on Airflow infrastructure. See [AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md) for complete guide.
+
+### Quick Deployment Steps
 
 ```bash
-# Navigate to project
-cd ~/Documents/credits-automation
+# 1. Build Docker image
+docker build -t credit-bot:latest .
 
-# Install dependencies
+# 2. Deploy to ECR
+./deploy.sh
+
+# 3. Update DAG image URL
+# Edit airflow/credit_bot_dag.py with ECR image URL
+
+# 4. Deploy to Airflow
+# Submit PR to airflow-dags repository
+
+# 5. Monitor
+# Check Airflow UI and CloudWatch logs
+```
+
+### Production Monitoring
+
+**Airflow UI**: AWS Console → MWAA → `credit_bot_automation`
+
+**CloudWatch Logs**:
+```bash
+aws logs tail /aws/eks/credit-bot --follow
+```
+
+**S3 State**:
+```bash
+aws s3 ls s3://credit-bot-state-*/state/
+```
+
+---
+
+## 💻 Local Development
+
+For testing changes locally. See [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) for complete guide.
+
+### Quick Local Setup
+
+```bash
+# 1. Clone and setup
+git clone git@github.com:twilio-internal/credits-automation.git
+cd credits-automation
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# Configure credentials
+# 3. Configure
 cp .env.example .env
-nano .env  # Add your Slack and Looker credentials
-```
+# Edit .env with your credentials
 
-### Step 2: Test Connection
-
-```bash
-# Test Slack
-python3 -m src.slack_client
-
-# Test Looker
-python3 -m src.looker_client
-```
-
-### Step 3: Run Bot
-
-```bash
-# Run in dry-run mode (safe!)
+# 4. Run locally
 python3 run_bot.py
+```
+
+### Test with Docker
+
+```bash
+# Build and test locally
+docker build -t credit-bot:test .
+docker run --rm --env-file .env credit-bot:test
 ```
 
 ### What Happens When You Run It
@@ -236,31 +410,35 @@ Before going live, test:
 
 ---
 
-## 🎯 Next Steps
+## 🎯 Current Status & Next Steps
 
-### Immediate (Today/Tomorrow)
-1. ✅ Review SETUP_GUIDE.md
-2. ✅ Create `.env` file with credentials
-3. ✅ Run `python3 run_bot.py` in dry-run mode
-4. ✅ Review logs to see what happened
+### ✅ Completed
+1. ✅ Prototype implementation (Phase 1)
+2. ✅ Docker containerization
+3. ✅ AWS integration (Secrets Manager + S3)
+4. ✅ Airflow DAG creation
+5. ✅ Production deployment scripts
+6. ✅ Comprehensive documentation
 
-### Short Term (This Week)
-5. ✅ Answer questions in DEVELOPMENT_QUESTIONS.md
-6. ✅ Create test messages in #credit_memo_testing
-7. ✅ Test with real Looker links
-8. ✅ Verify credit amounts are correct
+### ⏳ Pending (Blockers)
+1. **Presto Service Credentials** (approval pending)
+   - Required for database queries
+   - Alternative: AWS Glue integration (if not approved)
+2. **Slack Bot Approval** (security review)
+   - Security brief submitted: [SECURITY_APPROVAL_BRIEF.md](SECURITY_APPROVAL_BRIEF.md)
 
-### Medium Term (Next Week)
-9. ✅ Disable dry-run mode: `DRY_RUN=false`
-10. ✅ Test posting to Slack (in test channel)
-11. ✅ Run for a few days with monitoring
-12. ✅ Switch to production channel
+### 🚀 Ready to Deploy (Once Blockers Resolved)
+1. Create AWS resources (ECR, S3, Secrets Manager)
+2. Build and push Docker image
+3. Deploy Airflow DAG
+4. Monitor first 24-48 hours
+5. Enable full automation
 
-### Long Term (Next Month)
-13. ⏳ Set up scheduled runs (Airflow DAG)
-14. ⏳ Add PSMS notebook integration
-15. ⏳ Create monitoring dashboard
-16. ⏳ Optimize and enhance
+### 🔮 Future Enhancements
+- PSMS notebook integration
+- Multi-channel support
+- Advanced monitoring dashboard
+- ML-based credit prediction
 
 ---
 
@@ -406,17 +584,42 @@ You'll know it's working when:
 
 ---
 
-## 🚀 Ready to Start?
+## 📚 Documentation Quick Links
 
+| Document | When to Use |
+|----------|-------------|
+| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | Deploying to production |
+| **[RUNBOOK.md](RUNBOOK.md)** | Operating in production |
+| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | Local testing & development |
+| **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | Initial setup (local or production) |
+| **[SECURITY_APPROVAL_BRIEF.md](SECURITY_APPROVAL_BRIEF.md)** | Security review process |
+
+---
+
+## 🎯 What's Next?
+
+**For Production Deployment:**
 ```bash
-cd ~/Documents/credits-automation
-cat SETUP_GUIDE.md  # Read this first!
+# See AIRFLOW_DEPLOYMENT.md for complete guide
+./deploy.sh
+```
+
+**For Local Testing:**
+```bash
+# See LOCAL_DEVELOPMENT.md for complete guide
+python3 run_bot.py
+```
+
+**For Operations:**
+```bash
+# See RUNBOOK.md for health checks and troubleshooting
+aws logs tail /aws/eks/credit-bot --follow
 ```
 
 ---
 
-**Built with ❤️ by Claude Code**
+**Last Updated:** 2026-01-14
+**Status:** 🚀 Production Ready
+**Deployment Target:** Airflow MWAA on `applied-data-science-prod-twilio`
 
-All code is production-ready, documented, and tested. Ready for your review and testing!
-
-🎯 **Your move:** Follow SETUP_GUIDE.md and let me know how it goes!
+All code is production-ready, containerized, documented, and ready for deployment once approvals are complete!

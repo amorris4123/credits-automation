@@ -320,7 +320,8 @@ def main():
     logger.info("\n" + "="*80)
     logger.info(f"CREDIT BOT - {Config.BOT_NAME}")
     logger.info("="*80)
-    logger.info(f"Mode: {'DRY RUN' if Config.DRY_RUN else 'PRODUCTION'}")
+    logger.info(f"Environment: {Config.EXECUTION_ENV}")
+    logger.info(f"S3 Storage: {'Enabled' if Config.USE_S3_STORAGE else 'Disabled (Local)'}")
     logger.info("="*80 + "\n")
 
     # Create bot
@@ -329,18 +330,21 @@ def main():
     # Initialize
     if not bot.initialize():
         logger.error("Initialization failed. Exiting.")
-        sys.exit(1)
+        return 1
 
     # Run once
     try:
         bot.run_once()
         logger.info("\n✅ Bot execution complete")
+        return 0
     except KeyboardInterrupt:
         logger.info("\n\n⚠️ Bot stopped by user")
+        return 130
     except Exception as e:
         logger.error(f"\n❌ Unexpected error: {e}", exc_info=True)
-        sys.exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    exit_code = main()
+    sys.exit(exit_code)

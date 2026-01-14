@@ -1,6 +1,7 @@
 """
 State Manager
 Tracks processed messages to avoid duplicate processing
+Supports both local file storage and S3 backend
 """
 
 import json
@@ -24,26 +25,51 @@ class StateManager:
             state_file: Path to state file (defaults to Config)
         """
         self.state_file = state_file or Config.STATE_FILE
+        self.use_s3 = Config.USE_S3_STORAGE
+        self.aws_client = Config.get_aws_client() if self.use_s3 else None
+
+        # Load state from S3 or local file
         self.state = self._load_state()
 
     def _load_state(self) -> Dict[str, Any]:
         """
-        Load state from file
+        Load state from S3 or local file
 
         Returns:
             State dictionary
         """
+        # Try S3 first if enabled
+        if self.use_s3 and self.aws_client:
+            try:
+                content = self.aws_client.read_from_s3(
+                    bucket=Config.S3_BUCKET,
+                    key=Config.S3_STATE_KEY
+                )
+                if content:
+                    state = json.loads(content)
+                    logger.info(f"Loaded state from S3: s3://{Config.S3_BUCKET}/{Config.S3_STATE_KEY}")
+
+                    # Also save to local file as cache
+                    self._save_to_local_file(state)
+
+                    return state
+                else:
+                    logger.info("No state file in S3, checking local cache")
+            except Exception as e:
+                logger.warning(f"Error loading state from S3: {e}, falling back to local file")
+
+        # Fall back to local file
         if self.state_file.exists():
             try:
                 with open(self.state_file, 'r') as f:
                     state = json.load(f)
-                logger.info(f"Loaded state from {self.state_file}")
+                logger.info(f"Loaded state from local file: {self.state_file}")
                 return state
             except Exception as e:
-                logger.error(f"Error loading state file: {e}")
+                logger.error(f"Error loading local state file: {e}")
                 return self._create_empty_state()
         else:
-            logger.info("No existing state file, creating new state")
+            logger.info("No existing state, creating new state")
             return self._create_empty_state()
 
     def _create_empty_state(self) -> Dict[str, Any]:
@@ -55,14 +81,37 @@ class StateManager:
             'created_at': datetime.now().isoformat()
         }
 
-    def _save_state(self):
-        """Save current state to file"""
+    def _save_to_local_file(self, state: Dict = None):
+        """Save state to local file"""
+        state_to_save = state or self.state
         try:
             with open(self.state_file, 'w') as f:
-                json.dump(self.state, f, indent=2)
-            logger.debug(f"State saved to {self.state_file}")
+                json.dump(state_to_save, f, indent=2)
+            logger.debug(f"State saved to local file: {self.state_file}")
         except Exception as e:
-            logger.error(f"Error saving state: {e}")
+            logger.error(f"Error saving local state: {e}")
+
+    def _save_state(self):
+        """Save current state to S3 and/or local file"""
+        # Always save to local file (as cache/backup)
+        self._save_to_local_file()
+
+        # If S3 enabled, also save to S3
+        if self.use_s3 and self.aws_client:
+            try:
+                content = json.dumps(self.state, indent=2)
+                success = self.aws_client.write_to_s3(
+                    bucket=Config.S3_BUCKET,
+                    key=Config.S3_STATE_KEY,
+                    content=content,
+                    content_type='application/json'
+                )
+                if success:
+                    logger.info(f"State saved to S3: s3://{Config.S3_BUCKET}/{Config.S3_STATE_KEY}")
+                else:
+                    logger.warning("Failed to save state to S3")
+            except Exception as e:
+                logger.error(f"Error saving state to S3: {e}")
 
     def is_processed(self, message_ts: str) -> bool:
         """

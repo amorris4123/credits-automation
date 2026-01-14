@@ -1,6 +1,7 @@
 """
 Notebook Executor
 Executes Jupyter notebooks with papermill and extracts results
+Supports S3 storage for outputs in production
 """
 
 import papermill as pm
@@ -28,12 +29,16 @@ class NotebookExecutor:
         """
         self.notebook_path = notebook_path or Config.NOTEBOOK_PATH
         self.output_dir = output_dir or Config.OUTPUT_DIR
+        self.use_s3 = Config.USE_S3_STORAGE
+        self.aws_client = Config.get_aws_client() if self.use_s3 else None
 
         # Verify notebook exists
         if not self.notebook_path.exists():
             raise FileNotFoundError(f"Notebook not found: {self.notebook_path}")
 
         logger.info(f"Notebook executor initialized with: {self.notebook_path}")
+        if self.use_s3:
+            logger.info(f"S3 storage enabled: s3://{Config.S3_BUCKET}/{Config.S3_OUTPUT_PREFIX}")
 
     def execute(self, looker_query: str, asid: str = None) -> Dict[str, Any]:
         """
@@ -80,9 +85,24 @@ class NotebookExecutor:
             summary_data = self._extract_summary_info(temp_notebook_path)
             credit_amount = summary_data['credit_amount']
 
-            # Save summary as JSON
+            # Save summary as JSON locally
             with open(summary_json_path, 'w', encoding='utf-8') as f:
                 json.dump(summary_data, f, indent=2, default=str)
+
+            # Upload to S3 if enabled
+            s3_path = None
+            if self.use_s3 and self.aws_client:
+                s3_key = f"{Config.S3_OUTPUT_PREFIX}/{summary_json_path.name}"
+                success = self.aws_client.upload_file_to_s3(
+                    bucket=Config.S3_BUCKET,
+                    key=s3_key,
+                    file_path=summary_json_path
+                )
+                if success:
+                    s3_path = f"s3://{Config.S3_BUCKET}/{s3_key}"
+                    logger.info(f"Summary uploaded to S3: {s3_path}")
+                else:
+                    logger.warning("Failed to upload summary to S3, only local copy available")
 
             # Delete the full notebook to save space
             if temp_notebook_path.exists():
@@ -93,12 +113,15 @@ class NotebookExecutor:
 
             logger.info(f"Notebook executed successfully in {execution_time:.2f}s")
             logger.info(f"Summary saved to: {summary_json_path}")
+            if s3_path:
+                logger.info(f"Summary also available at: {s3_path}")
             logger.info(f"Credit amount: ${credit_amount}" if credit_amount else "No credit amount found")
 
             return {
                 'success': True,
                 'credit_amount': credit_amount,
-                'output_path': summary_json_path,  # Now returns JSON path instead of notebook
+                'output_path': summary_json_path,  # Local path
+                's3_path': s3_path,  # S3 path (if uploaded)
                 'error': None,
                 'execution_time': execution_time
             }

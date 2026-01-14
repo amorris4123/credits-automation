@@ -3,12 +3,13 @@
 
   # Credits Automation Bot
 
-  [![Status](https://img.shields.io/badge/status-ready%20for%20testing-success)]()
+  [![Status](https://img.shields.io/badge/status-production%20ready-success)]()
   [![Python](https://img.shields.io/badge/python-3.9+-blue)]()
+  [![Deployment](https://img.shields.io/badge/deploy-airflow%20%2B%20kubernetes-blue)]()
 
   **Automated SMS toll fraud credit processing for Twilio**
 
-  [Quick Start](#-quick-start) • [Setup Guide](SETUP_GUIDE.md) • [Features](#-features)
+  [Production Deployment](#-production-deployment) • [Local Development](#-local-development) • [Features](#-features)
 </div>
 
 ---
@@ -34,7 +35,30 @@ Manual credit processing workflow:
 
 ### The Solution
 
-✨ **Fully automated end-to-end** - Bot handles everything from detection to posting results.
+✨ **Fully automated end-to-end** - Bot handles everything from detection to posting results, deployed on Twilio's Airflow infrastructure.
+
+### Production Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Airflow (MWAA) - applied-data-science-prod-twilio  │
+│  Runs every 15 minutes                               │
+└────────────┬────────────────────────────────────────┘
+             │
+             ↓
+    ┌───────────────────┐
+    │ Kubernetes (EKS)  │
+    │  Docker Container │
+    └─────────┬─────────┘
+              │
+              ├──→ AWS Secrets Manager (credentials)
+              ├──→ S3 (state + outputs)
+              ├──→ Slack API
+              ├──→ Looker API
+              └──→ Presto Database
+```
+
+**Deployment:** Containerized on Kubernetes, orchestrated by Airflow, fully automated with no manual intervention required.
 
 ---
 
@@ -59,40 +83,86 @@ Manual credit processing workflow:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Production Deployment
+
+CreditBot runs automatically on Twilio's Airflow infrastructure. No manual execution needed!
+
+### Access the Bot
+
+**Airflow UI**: AWS Console → `applied-data-science-prod-twilio` → MWAA → Open Airflow UI
+
+**DAG Name**: `credit_bot_automation`
+
+**Schedule**: Runs every 15 minutes automatically
+
+### Monitor Execution
+
+```bash
+# Check recent runs via Airflow UI
+# DAGs → credit_bot_automation → Graph View
+
+# View logs in CloudWatch
+aws logs tail /aws/eks/credit-bot --follow
+
+# Check processed messages
+aws s3 ls s3://credit-bot-state-XXXXX/state/
+```
+
+### Deployment Guides
+
+| Guide | Purpose |
+|-------|---------|
+| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Deploy updates, troubleshoot issues |
+| **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide for production |
+| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | 💻 Local testing and development |
+
+---
+
+## 💻 Local Development
+
+For testing changes locally before deploying:
 
 ### Prerequisites
 - Python 3.9+
+- Docker (optional, for container testing)
+- AWS CLI (for production deployment)
 - Slack Bot Token with permissions: `channels:history`, `channels:read`, `chat:write`, `im:write`
 - Looker API credentials (client ID and secret)
-- Jupyter notebook with parameters cell
+- Presto database access
 
-### Installation
+### Quick Start
 
 ```bash
 # 1. Clone repository
-cd /Users/amorris/Documents/credits-automation
+git clone git@github.com:twilio-internal/credits-automation.git
+cd credits-automation
 
-# 2. Install dependencies
+# 2. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure environment
+# 4. Configure environment
 cp .env.example .env
-# Edit .env with your credentials (see Setup Guide)
+# Edit .env with your credentials (see LOCAL_DEVELOPMENT.md)
 
-# 4. Run the bot
+# 5. Run the bot locally
 python3 run_bot.py
 ```
 
-### First Run
-The bot will:
-1. ✅ Test Slack connection
-2. ✅ Test Looker authentication
-3. ✅ Find #credit_memo_testing channel
-4. 📥 Check for new messages
-5. 💬 Post credit amounts to Slack threads
+### Test with Docker
 
-**📖 Full Setup Instructions:** [SETUP_GUIDE.md](SETUP_GUIDE.md)
+```bash
+# Build image
+docker build -t credit-bot:test .
+
+# Run container
+docker run --rm --env-file .env credit-bot:test
+```
+
+**📖 Full Local Setup:** [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)
 
 ---
 
@@ -102,25 +172,42 @@ The bot will:
 credits-automation/
 ├── run_bot.py                          # 🎯 Main entry point
 ├── requirements.txt                    # Python dependencies
+├── docker-requirements.txt             # 🐳 Docker/production dependencies
 ├── .env.example                        # Config template
-├── SETUP_GUIDE.md                      # Complete setup instructions
-├── PROTOTYPE_SUMMARY.md                # Implementation details
+│
+├── Dockerfile                          # 🐳 Container definition
+├── .dockerignore                       # Docker build exclusions
+├── deploy.sh                           # 🚀 Deployment script
+│
+├── airflow/                            # ✈️ Airflow DAG
+│   └── credit_bot_dag.py               # DAG definition for MWAA
 │
 ├── src/                                # Bot source code
 │   ├── credit_bot.py                   # Main orchestrator
 │   ├── slack_client.py                 # Slack API wrapper
 │   ├── looker_client.py                # Looker API wrapper
 │   ├── notebook_executor.py            # Papermill runner + summary extraction
-│   ├── state_manager.py                # Message tracking
+│   ├── state_manager.py                # Message tracking (S3-backed)
+│   ├── aws_integration.py              # 🔐 AWS Secrets Manager + S3
 │   └── config.py                       # Configuration management
 │
-├── data/                               # Runtime data
+├── data/                               # Runtime data (local dev only)
 │   ├── processed_messages.json         # Tracks processed messages
-│   └── outputs/                        # Summary JSON files (not full notebooks)
+│   └── outputs/                        # Summary JSON files
 │
-└── logs/                               # Application logs
-    └── credit_bot.log
+├── logs/                               # Application logs (local dev only)
+│   └── credit_bot.log
+│
+└── docs/                               # 📚 Documentation
+    ├── AIRFLOW_DEPLOYMENT.md           # Production deployment guide
+    ├── LOCAL_DEVELOPMENT.md            # Local development guide
+    ├── RUNBOOK.md                      # Operations runbook
+    ├── SETUP_GUIDE.md                  # Setup instructions
+    ├── PROTOTYPE_SUMMARY.md            # Implementation details
+    └── SECURITY_APPROVAL_BRIEF.md      # Security documentation
 ```
+
+**Production**: State and outputs stored in S3, not local files
 
 ---
 
@@ -272,10 +359,19 @@ cat data/processed_messages.json | jq .
 
 ## 📚 Documentation
 
+### Production Operations
 | Document | Description |
 |----------|-------------|
-| [SETUP_GUIDE.md](SETUP_GUIDE.md) | ⭐ Complete setup and configuration instructions |
-| [PROTOTYPE_SUMMARY.md](PROTOTYPE_SUMMARY.md) | Implementation details and current status |
+| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Production deployment guide - build, push, deploy |
+| **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide - monitoring, troubleshooting, incident response |
+| **[SECURITY_APPROVAL_BRIEF.md](SECURITY_APPROVAL_BRIEF.md)** | 🔐 Security documentation and compliance |
+
+### Development
+| Document | Description |
+|----------|-------------|
+| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | 💻 Local testing and development workflow |
+| **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | ⭐ Complete setup and configuration instructions |
+| **[PROTOTYPE_SUMMARY.md](PROTOTYPE_SUMMARY.md)** | 📝 Implementation details and current status |
 | `.env.example` | Environment variable template |
 
 ---
@@ -325,7 +421,9 @@ Internal use only - Twilio proprietary.
 
 <div align="center">
 
-**Status:** ✅ Ready for Testing (pending Slack bot approval)
+**Status:** 🚀 Production Ready (pending Presto service credentials + Slack bot approval)
+
+**Deployment:** Airflow MWAA on `applied-data-science-prod-twilio`
 
 Made with ☕ by the Credit Operations Team
 

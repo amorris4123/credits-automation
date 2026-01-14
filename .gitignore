@@ -55,3 +55,11 @@ slack*.txt
 # Airflow (if used)
 airflow.db
 airflow.cfg
+
+# Documentation artifacts
+*.docx
+*.pdf
+
+# Data and outputs
+data/
+outputs/

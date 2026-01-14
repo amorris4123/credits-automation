@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.*
+
+# Local data and logs
+data/
+logs/
+*.log
+
+# Outputs
+outputs/
+*.ipynb_checkpoints/
+
+# Documentation (not needed in container)
+*.md
+!requirements.txt
+!docker-requirements.txt
+
+# Test files
+test_*.py
+*_test.py
+tests/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Credentials
+slack creds.txt
+*.pem
+*.key
+
+# Large files
+*.pdf
+*.png
+*.jpg
+*.docx
+
+# Airflow (DAG is deployed separately)
+airflow/

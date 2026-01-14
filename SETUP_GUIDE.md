@@ -1,18 +1,94 @@
 # Credits Automation - Setup Guide
 
-Complete setup instructions for the Credit Bot prototype.
+Complete setup instructions for CreditBot - both production deployment and local development.
 
-## 📋 Prerequisites
+---
 
+## 🎯 Setup Type
+
+Choose your setup path:
+
+- **🚀 [Production Deployment](#-production-deployment-setup)**: Deploy to Airflow on AWS (automated, runs every 15 minutes)
+- **💻 [Local Development](#-local-development-setup)**: Run locally for testing and development
+
+---
+
+## 📋 Common Prerequisites
+
+### For Production Deployment
+- AWS access to `applied-data-science-prod-twilio` account
+- TBAC access (already granted)
+- Docker installed locally
+- AWS CLI configured
+- Access to `airflow-dags` GitHub repository
+
+### For Local Development
 - Python 3.9 or higher
 - Slack app with bot token
 - Looker API credentials
+- Presto database access
 - Jupyter notebook environment
 - Git (for version control)
 
 ---
 
-## 🚀 Quick Setup (5 minutes)
+## 🚀 Production Deployment Setup
+
+For deploying CreditBot to Airflow/Kubernetes infrastructure.
+
+### Prerequisites Checklist
+
+- [x] AWS console access to `applied-data-science-prod-twilio`
+- [ ] Docker Desktop installed and running
+- [ ] AWS CLI configured with credentials
+- [ ] Slack bot token obtained
+- [ ] Looker API credentials obtained
+- [ ] Presto service credentials (⏳ approval pending)
+
+### Quick Start
+
+1. **Build Docker Image**
+   ```bash
+   cd /path/to/credits-automation
+   docker build -t credit-bot:latest .
+   ```
+
+2. **Deploy to ECR**
+   ```bash
+   ./deploy.sh
+   # Or with version tag:
+   # ./deploy.sh v1.0.0
+   ```
+
+3. **Set Up AWS Resources**
+   - Create ECR repository
+   - Create S3 bucket for state
+   - Store credentials in AWS Secrets Manager
+   - See detailed steps in [AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)
+
+4. **Deploy DAG to Airflow**
+   - Update image URL in `airflow/credit_bot_dag.py`
+   - Submit PR to `airflow-dags` repository
+   - Verify in Airflow UI
+
+### Detailed Production Setup
+
+**📖 Complete Guide**: See [AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md) for:
+- AWS resource creation (ECR, S3, Secrets Manager)
+- Docker image building and pushing
+- Airflow DAG deployment
+- Monitoring and troubleshooting
+- Production operations
+
+**📖 Operations Guide**: See [RUNBOOK.md](RUNBOOK.md) for:
+- Day-to-day operations
+- Monitoring and health checks
+- Incident response procedures
+- Common issues and solutions
+
+---
+
+## 💻 Local Development Setup
 
 ### Step 1: Install Dependencies
 
@@ -197,16 +273,25 @@ The bot will:
 
 ### Running in Production
 
-**⚠️ Only after thorough testing!**
+**⚠️ Production runs on Airflow, not locally!**
 
+For production deployment, the bot runs automatically on Airflow infrastructure. See the [Production Deployment Setup](#-production-deployment-setup) section above and [AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md).
+
+**Local "production-like" testing:**
 ```bash
 # Edit .env and change:
 DRY_RUN=false
-SLACK_TEST_CHANNEL=help-sms-credit-pumping-memos
+SLACK_TEST_CHANNEL=credit_memo_testing  # Use test channel!
 
-# Run the bot
+# Run the bot locally
 python3 run_bot.py
 ```
+
+**Note**: This is for testing only. Actual production uses:
+- Airflow for scheduling (every 15 minutes)
+- Kubernetes for execution
+- AWS Secrets Manager for credentials
+- S3 for state storage
 
 ---
 
@@ -349,20 +434,30 @@ Post to Slack: "Approved, $X, exceptions"
 
 ## 🎬 Next Steps
 
-### After Successful Testing
+### After Local Testing
 
-1. **Monitor for 1 week** in test channel
+1. **Test locally** with test Slack channel
 2. **Review all outputs** manually
 3. **Fix any issues** that arise
-4. **Switch to production** channel
-5. **Set up scheduling** (see DEPLOYMENT.md)
+4. **Test with Docker** (`docker build` + `docker run`)
+5. **Deploy to production** Airflow (see [AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md))
 
-### Optional Enhancements
+### After Production Deployment
 
-- Set up continuous monitoring (cron/Airflow)
-- Add desktop alerts integration
-- Create dashboard for monitoring
-- Add PSMS notebook integration
+1. **Monitor first 24 hours** closely (Airflow UI + CloudWatch logs)
+2. **Verify state file** updating in S3
+3. **Check Slack posts** are appearing correctly
+4. **Review success rate** (target: >95%)
+5. **Set up alerts** (SLA monitoring in Airflow)
+
+### Future Enhancements
+
+- ✅ Airflow scheduling (complete)
+- ✅ AWS Secrets Manager integration (complete)
+- ✅ S3-backed state management (complete)
+- 🔮 PSMS notebook integration (planned)
+- 🔮 Dashboard for monitoring (planned)
+- 🔮 ML-based credit prediction (planned)
 
 ---
 
