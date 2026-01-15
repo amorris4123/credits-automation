@@ -3,14 +3,43 @@
 
   # Credits Automation Bot
 
-  [![Status](https://img.shields.io/badge/status-production%20ready-success)]()
+  [![Status](https://img.shields.io/badge/status-pending%20migration-yellow)]()
   [![Python](https://img.shields.io/badge/python-3.9+-blue)]()
   [![Deployment](https://img.shields.io/badge/deploy-airflow%20%2B%20kubernetes-blue)]()
 
   **Automated SMS toll fraud credit processing for Twilio**
 
-  [Production Deployment](#-production-deployment) • [Local Development](#-local-development) • [Features](#-features)
+  [🔄 Migration Plan](#-sagemaker-migration) • [Current Architecture](#-current-architecture) • [Features](#-features)
 </div>
+
+---
+
+## 🔄 SageMaker Migration
+
+> **📋 Current Status:** Bot is operational but **pending migration to SageMaker Processing Jobs** with direct Presto database access.
+>
+> **🎯 Next Step:** Awaiting approval for Presto service account credentials
+>
+> **📖 Full Migration Plan:** [SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md)
+
+### Why Migrate?
+
+**Current (Local Papermill)**: Notebook executes locally in bot container with credentials from `.env` file
+
+**Future (SageMaker)**: Notebook executes in dedicated SageMaker container with service account credentials from AWS Secrets Manager
+
+**Benefits**:
+- ✅ **Security**: Centralized credential management via Secrets Manager
+- ✅ **Scalability**: Dedicated compute resources, not shared with bot process
+- ✅ **Reliability**: Isolated execution environment
+- ✅ **Direct Database Access**: Presto service account (no Looker dependency for queries)
+
+### Migration Blockers
+
+- [ ] Presto service account credentials approval
+- [ ] Slack bot security approval (existing blocker)
+
+**See [SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md) for implementation details**
 
 ---
 
@@ -37,7 +66,9 @@ Manual credit processing workflow:
 
 ✨ **Fully automated end-to-end** - Bot handles everything from detection to posting results, deployed on Twilio's Airflow infrastructure.
 
-### Production Architecture
+### Current Architecture (Pre-Migration)
+
+> **Note:** This describes the current operational architecture using local Papermill execution. See [SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md) for planned SageMaker architecture.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -46,16 +77,18 @@ Manual credit processing workflow:
 └────────────┬────────────────────────────────────────┘
              │
              ↓
-    ┌───────────────────┐
-    │ Kubernetes (EKS)  │
-    │  Docker Container │
-    └─────────┬─────────┘
+    ┌───────────────────────────────┐
+    │ Kubernetes (EKS)              │
+    │  Docker Container             │
+    │    ├─ Bot orchestrator        │
+    │    └─ Papermill (local exec)  │
+    └─────────┬─────────────────────┘
               │
               ├──→ AWS Secrets Manager (credentials)
               ├──→ S3 (state + outputs)
               ├──→ Slack API
               ├──→ Looker API
-              └──→ Presto Database
+              └──→ Presto Database (via credentials)
 ```
 
 **Deployment:** Containerized on Kubernetes, orchestrated by Airflow, fully automated with no manual intervention required.
@@ -112,13 +145,17 @@ aws s3 ls s3://credit-bot-state-XXXXX/state/
 
 | Guide | Purpose |
 |-------|---------|
-| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Deploy updates, troubleshoot issues |
-| **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide for production |
-| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | 💻 Local testing and development |
+| **[SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md)** | 🔄 **SageMaker migration plan** (start here!) |
+| **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Deploy updates, troubleshoot issues (current) |
+| **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide for production (current) |
+
+**Archived Pre-Migration Docs:** [archive/pre-sagemaker-docs/](archive/pre-sagemaker-docs/)
 
 ---
 
 ## 💻 Local Development
+
+> **Note:** These instructions are for the current pre-migration architecture. Will be updated after SageMaker migration.
 
 For testing changes locally before deploying:
 
@@ -162,8 +199,6 @@ docker build -t credit-bot:test .
 docker run --rm --env-file .env credit-bot:test
 ```
 
-**📖 Full Local Setup:** [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)
-
 ---
 
 ## 📁 Project Structure
@@ -186,10 +221,14 @@ credits-automation/
 │   ├── credit_bot.py                   # Main orchestrator
 │   ├── slack_client.py                 # Slack API wrapper
 │   ├── looker_client.py                # Looker API wrapper
-│   ├── notebook_executor.py            # Papermill runner + summary extraction
+│   ├── notebook_executor.py            # Papermill runner (to be replaced)
 │   ├── state_manager.py                # Message tracking (S3-backed)
 │   ├── aws_integration.py              # 🔐 AWS Secrets Manager + S3
 │   └── config.py                       # Configuration management
+│
+├── archive/                            # 📦 Archived files
+│   ├── pre-sagemaker-docs/             # Pre-migration documentation
+│   └── old-local-execution/            # To be populated during migration
 │
 ├── data/                               # Runtime data (local dev only)
 │   ├── processed_messages.json         # Tracks processed messages
@@ -198,13 +237,11 @@ credits-automation/
 ├── logs/                               # Application logs (local dev only)
 │   └── credit_bot.log
 │
-└── docs/                               # 📚 Documentation
-    ├── AIRFLOW_DEPLOYMENT.md           # Production deployment guide
-    ├── LOCAL_DEVELOPMENT.md            # Local development guide
-    ├── RUNBOOK.md                      # Operations runbook
-    ├── SETUP_GUIDE.md                  # Setup instructions
-    ├── PROTOTYPE_SUMMARY.md            # Implementation details
-    └── SECURITY_APPROVAL_BRIEF.md      # Security documentation
+├── SAGEMAKER_MIGRATION_PLAN.md         # 🔄 Migration plan (READ THIS FIRST)
+├── AIRFLOW_DEPLOYMENT.md               # Production deployment guide
+├── RUNBOOK.md                          # Operations runbook
+├── SECURITY_APPROVAL_BRIEF.md          # Security documentation
+└── SECURITY_BRIEF_ONE_PAGE.md          # Security summary
 ```
 
 **Production**: State and outputs stored in S3, not local files
@@ -359,20 +396,23 @@ cat data/processed_messages.json | jq .
 
 ## 📚 Documentation
 
-### Production Operations
+### 🔄 Migration (Start Here!)
+| Document | Description |
+|----------|-------------|
+| **[SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md)** | 🎯 **SageMaker migration plan** - implementation phases, AWS setup, testing |
+
+### Current Operations (Pre-Migration)
 | Document | Description |
 |----------|-------------|
 | **[AIRFLOW_DEPLOYMENT.md](AIRFLOW_DEPLOYMENT.md)** | 🚀 Production deployment guide - build, push, deploy |
 | **[RUNBOOK.md](RUNBOOK.md)** | 📖 Operations guide - monitoring, troubleshooting, incident response |
 | **[SECURITY_APPROVAL_BRIEF.md](SECURITY_APPROVAL_BRIEF.md)** | 🔐 Security documentation and compliance |
+| `.env.example` | Environment variable template |
 
-### Development
+### Archived Documentation
 | Document | Description |
 |----------|-------------|
-| **[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)** | 💻 Local testing and development workflow |
-| **[SETUP_GUIDE.md](SETUP_GUIDE.md)** | ⭐ Complete setup and configuration instructions |
-| **[PROTOTYPE_SUMMARY.md](PROTOTYPE_SUMMARY.md)** | 📝 Implementation details and current status |
-| `.env.example` | Environment variable template |
+| **[archive/pre-sagemaker-docs/](archive/pre-sagemaker-docs/)** | 📦 Pre-migration documentation (LOCAL_DEVELOPMENT, SETUP_GUIDE, PROTOTYPE_SUMMARY) |
 
 ---
 
@@ -389,11 +429,11 @@ cat data/processed_messages.json | jq .
 3. Check Looker base URL: `https://twiliocloud.cloud.looker.com`
 
 ### Notebook execution errors?
-1. Verify notebook path is correct (note space in "credit memos")
+1. Verify notebook path is correct
 2. Check notebook has parameters cell with `looker = ""`
 3. Ensure Python kernel is available: `jupyter kernelspec list`
 
-**See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed troubleshooting**
+**See [RUNBOOK.md](RUNBOOK.md) for detailed troubleshooting**
 
 ---
 
@@ -421,7 +461,13 @@ Internal use only - Twilio proprietary.
 
 <div align="center">
 
-**Status:** 🚀 Production Ready (pending Presto service credentials + Slack bot approval)
+**Status:** ⏳ Operational, Pending SageMaker Migration
+
+**Blockers:**
+- Presto service account credentials approval
+- Slack bot security approval
+
+**Next Steps:** See [SAGEMAKER_MIGRATION_PLAN.md](SAGEMAKER_MIGRATION_PLAN.md)
 
 **Deployment:** Airflow MWAA on `applied-data-science-prod-twilio`
 
