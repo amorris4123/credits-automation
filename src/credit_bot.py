@@ -11,7 +11,7 @@ from pathlib import Path
 from .config import Config
 from .slack_client import SlackClient
 from .looker_client import LookerClient
-from .notebook_executor import NotebookExecutor
+from .notebook_executor import NotebookExecutor  # TODO: Will be replaced by SageMakerExecutor (see SAGEMAKER_MIGRATION_PLAN.md)
 from .state_manager import StateManager
 
 # Setup logging
